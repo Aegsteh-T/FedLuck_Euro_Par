@@ -1,0 +1,389 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{geometry}
+\usepackage{lipsum}
+
+
+\makeatletter
+\newenvironment{breakablealgorithm}
+  {% \begin{breakablealgorithm}
+   \begin{center}
+     \refstepcounter{algorithm}% New algorithm
+     \hrule height.8pt depth0pt \kern2pt% \@fs@pre for \@fs@ruled
+     \renewcommand{\caption}[2][\relax]{% Make a new \caption
+       {\raggedright\textbf{\ALG@name~\thealgorithm} ##2\par}%
+       \ifx\relax##1\relax % #1 is \relax
+         \addcontentsline{loa}{algorithm}{\protect\numberline{\thealgorithm}##2}%
+       \else % #1 is not \relax
+         \addcontentsline{loa}{algorithm}{\protect\numberline{\thealgorithm}##1}%
+       \fi
+       \kern2pt\hrule\kern2pt
+     }
+  }{% \end{breakablealgorithm}
+     \kern2pt\hrule\relax% \@fs@post for \@fs@ruled
+   \end{center}
+  }
+\makeatother
+
+
+\geometry{a4paper,scale=0.85}
+\title{Appendix}
+
+\allowdisplaybreaks[4]
+\begin{document}
+\maketitle
+
+\section{Optimization problem and assumptions}
+\subsection{Fedrated Learning}\label{subsec:3.1FL}
+This paper focuses on a parameter server (PS) architecture, comprising a centralized PS for global aggregation and a set of $N$ distributed local devices represented as $\mathcal{N}$. The PS maintains a global model $\mathbf{w} \in \mathbb{R}^d$. Each device, represented by $i \in \mathcal{N}$, possesses a model weight $\mathbf{w}_{i}$ and a local dataset $D_i$. Within this dataset, there exist $|D_i|$ data samples, expressed as $\xi_i = [\xi_{i,1}, \xi_{i,2}, \cdots, \xi_{i,|D_i|}]$, which are utilized for local training. We define the loss function for each data sample $\xi_{i,j}$ ($j \in [1,|D_i|]$), as $f(\mathbf{w}_i, \xi_{i,j})$,  and denote the local loss function of device $i$ as:
+\begin{equation}
+    F_i(\mathbf{w}_i) := \frac{1}{|D_i|} \sum_{j = 1}^{|D_i|} f(\mathbf{w}_i, \xi_{i,j}), 
+\end{equation}
+
+The target of this system is to train a global model $\mathbf{w}$ that minimizes the global loss function defined as:
+\begin{equation}
+    F(\mathbf{w}) = \frac{1}{N}\sum_{i \in \mathcal{N}}  F_i(\mathbf{w})
+\end{equation}
+
+In each round of training, participating devices perform local training on their respective datasets using the current global model. During this local training, each device computes the gradient of the loss function with respect to its local data samples. After local training, devices communicate with the parameter server and send their computed gradients. The parameter server aggregates these gradients to obtain a new global model. The newly aggregated global model is then distributed back to the participating devices, replacing their previous local models. This iterative update process continues for multiple rounds, allowing the global model to be refined and improved over time.
+
+\subsection{Asynchronous FL with Periodic Aggregation}\label{subsec:3.2AFL}
+We specifically targets the domain of asynchronous federated learning with periodic aggregation. The fundamental concept underlying this approach is to enable independent training processes across different devices, where the server periodically aggregates the received updates from devices that have finished their computations, while allowing other devices to continue their local training uninterrupted. Considering the diversity in computational capabilities and communication capabilities among devices, once a device completes its local training, it transmits its local gradient to the server. Specifically, the entire training process comprises a total of $T$ periods, \textit{(i.e., a global round)}. Within each period, every local device undertakes $k$ local iterations. At each local iteration $j$, ranging from 0 to $k-1$, local device $i$ updates its local model following the prescribed rule:
+\begin{equation}
+    \mathbf{w}_i^{t, j+1} = \mathbf{w}_i^{t, j} - \eta_l \nabla F_i(\mathbf{w}_i^{t,j}, \xi_i^{t,j})
+\end{equation}
+where $\eta_l$ is the learning rate of local device, and $\mathbf{w}_i^{t, j}$ is the model of $j$-th local iteration of device $i$ training with global model $\mathbf{w}^t$.
+
+When a local device $i$ has finished its $k$ local updates to train the global model $\mathbf{w}^t$, it computes the overall gradient $\mathbf{g}_i^t$ in local training, that is:
+\begin{equation}
+    \mathbf{g}_i^t = \mathbf{w}_i^{t, 0} - \mathbf{w}_i^{t, k}
+\end{equation}
+Note that when a local device $i$ receives the $t$-th global model $\mathbf{w}^t$, it will be initialized with $\mathbf{w}_i^{t, 0} = \mathbf{w}^t$. Then, the local device will uploads a compressed update $\tilde{\mathbf{g}}_i^t = C(\mathbf{g}_i^t)$ to the parameter server. Therefore, the total time for training and communication of device $i$ is:
+\begin{equation}
+\label{equ:device time}
+    d_i = k\alpha_i + \delta\beta_i
+\end{equation}
+where we define the number of local iterations is $k$ and the compression rate of compressor $C$ is $\delta$. Let $\alpha_i$ denote the computation time required for one local iteration on device $i$, and $\beta_i$ represent the communication time for transmitting a full model on the same device. Given that the download bandwidth is typically bigger than the upload bandwidth\cite{uploadtime1,fedlamp}, our attention is primarily directed towards the communication time involved in transmitting the models from devices to the parameter server (PS) during the model exchange process.
+ 
+At the same time the server continuously receives gradients from local devices. We define $\mathbf{S}^t$ as the set of local devices to which the server has received gradients in the $t$-th global round. The parameter server then aggregate the received local gradient from $\mathbf{S}^t$ and updates the global model according to:
+\begin{equation}
+    \label{equ:global update}
+    \mathbf{w}^{t + 1} = \mathbf{w}^{t} - \frac{\eta_g}{|\mathbf{S}^t|} \sum_{i \in \mathbf{S}^t}  \tilde{\mathbf{g}}_i^{t - \tau_i}
+\end{equation}
+where $\eta_g$ is the global learning rate. Due to the asynchronous nature, the gradient may be stale. That is, the gradient of device $\tilde{\mathbf{g}}_i^{t - \tau_i}$ is generated by device $i$ to train the global model $\mathbf{w}^{t - \tau_i}$. But when the parameter server received $\tilde{\mathbf{g}}_i^{t - \tau_i}$, it is executing the $t$-th round of aggregation. Based on the above content, the staleness of device $i$ to train the global model $\mathbf{w}^{t - \tau_i}$ is $\tau_i$. And $\tau_i$ is computed by the following rule:
+\begin{equation}
+\label{equ:staleness}
+    \tau_i = t - \mathop{max}_{t^{'} < t} \{t^{'} | i \in \mathbf{S}^{t^{'}} \}
+\end{equation}
+In the context of this paper, the staleness $\tau_i$ can also be calculated with $\tau_i = \lceil \frac{d_i}{\tilde{T}}\rceil$, where $\tilde{T}$ is the clock time of one period. When the number of local iterations and compression rate are unchanging, the staleness $\tau_i$ is always equal to $\tau_i = \lceil \frac{d_i}{\tilde{T}}\rceil$, \textit{i.e. $\tau_i = \tau_i = \lceil \frac{d_i}{\tilde{T}}\rceil, \forall t \le T$.}
+
+Asynchronous FL with periodic aggregation is summarized in Algorithm \ref{alg:AFL}.
+
+\begin{algorithm}
+    \caption{Asynchronous FL with periodic aggregation}
+    \label{alg:AFL}
+    \begin{algorithmic}
+    \STATE \textbf{Server:}
+    \STATE Broadcast $\mathbf{w}^0$ to all devices and start them
+    \FOR{$t = 0,1, \cdots, T - 1$:}
+        \STATE Continuously receive $\tilde{\mathbf{g}}_i^{t - \tau_i}$ from local devices set $\mathbf{S}^t$
+        \STATE  $\mathbf{w}^{t + 1} = \mathbf{w}^{t} - \frac{\eta_g}{|\mathbf{S}^t|} \sum_{i \in \mathbf{S}^t}  \tilde{\mathbf{g}}_i^{t - \tau_i}$
+        \FOR{$i \in \mathbf{S}^t$}
+        \STATE Send new global model $\mathbf{w}^{t + 1}$ to $i$
+        \ENDFOR
+    \ENDFOR
+    \STATE Notice all devices to \textit{STOP}
+    \STATE \quad
+    
+    \STATE \textbf{Device:}
+    \WHILE{not \textit{STOP}:}
+    \STATE Receive $\mathbf{w}^t$ from server
+    \STATE Set $\mathbf{w}_i^{t,0} \gets \mathbf{w}^t$
+    \FOR{each local iteration $j \in {0,1,\cdots,k - 1}$}
+    \STATE $\mathbf{w}_i^{t,j+1} \gets \mathbf{w}_i^{t,j} - \eta_l \nabla F_i(\mathbf{w}_i^{t,j},\xi_i^{t,j})$
+    \ENDFOR
+    \STATE Compute gradient $\mathbf{g}_i^t \gets \mathbf{w}_i^{t,0} - \mathbf{w}_i^{t,k}$
+    \STATE Compute compressed gradient $\tilde{\mathbf{g}}_i^t \gets C(\mathbf{g}_i^t)$
+    \STATE Send $\tilde{g}_i^t$ to server
+    \ENDWHILE
+    \end{algorithmic}
+\end{algorithm}
+
+\subsection{Assumptions}
+
+\textbf{Assumption 1.} (Bounded local variance). \textit{There exists a constant $\sigma$, such that the variance of each the local estimator is bounded by: }
+\begin{equation}
+    \mathbb{E}_{\xi \sim \mathcal{D}_i} \big[ ||\nabla F_i(\mathbf{w}, \xi) - \nabla F_i(\mathbf{w})||\big] \le \sigma, \forall i \in \mathcal{N}, \forall \mathbf{w} \in \mathbb{R}^d
+    \label{assum:localvariacne}
+\end{equation}
+
+\textbf{Assumption 2.} (Bounded function heterogeneity). \textit{There exists $N$ constants $\zeta_i^2 \ge 0, i \in \mathcal{N}$, such that the variance of the model gradients is bounded by:}
+\begin{equation}
+    ||\nabla F_i(\mathbf{w}) - \nabla F(\mathbf{w})||^2 \le \zeta_i^2, \forall \mathbf{w} \in \mathbb{R}^d
+    \label{assum:noniid}
+\end{equation}
+and we define $\zeta^2 := \frac{1}{N}\sum_{i \in \mathcal{N}} \zeta_i^2$.
+
+\textbf{Assumption 3.} (L-smooth). \textit{The loss functions $F$ and  $F_i$ are L-smooth with a constant $L \ge 0$ such that:}
+\begin{equation}
+    ||\nabla F_i(\mathbf{y}) - \nabla F_i(\mathbf{x})|| \le L||\mathbf{y} - \mathbf{x}||, \forall \mathbf{x}, \mathbf{y} \in \mathbb{R}^d
+    \label{assum:lsmooth}
+\end{equation}
+
+\textbf{Assumption 4.} (Bounded gradient). \textit{There exists a constant $G \ge 0$ such that the norm of local gradient is bounded by:}
+\begin{equation}
+    ||\nabla F_i(\mathbf{w})||^2 \le G^2, \forall \mathbf{w} \in \mathbb{R}^d
+    \label{assum:boundedgradient}
+\end{equation}
+
+\subsection{Useful inequalities and equalities}
+\begin{equation}
+    <\textbf{a},\textbf{b}> \, \le \frac{||\textbf{a}||^2 + ||\textbf{b}||^2}{2}
+    \label{equ:basic inequality}
+\end{equation}
+
+\begin{equation}
+    ||\sum_{i=1}^{N} \textbf{a}_i||^2 \le N \sum_{i=1}^{N} ||\textbf{a}_i||^2
+    \label{equ:vector norm}
+\end{equation}
+
+\begin{equation}
+    ||\textbf{a} + \textbf{b}||^2 \le (1 + \alpha)||\textbf{a}||^2 + (1 + \alpha^{-1})||\textbf{b}||^2
+    \label{equ:sum square}
+\end{equation}
+
+\begin{equation}
+    <\textbf{a},\textbf{b}> = \frac{1}{2}(||\textbf{a}||^2 + ||\textbf{b}||^2 - ||\textbf{a} - \textbf{b}||^2)
+    \label{equ:inner product}
+\end{equation}
+
+
+\section{Theoretical Analysis}
+
+In order to analyze the convergence of Algorithm \ref{alg:AFL}, and give the parameter optimization method. We analyzed the convergence of Algorithm 1.
+
+The function is $L-$smooth, we have:
+\begin{equation}
+\label{equ:first lsmooth}
+    \mathbb{E}\big[F(\mathbf{w}^{t + 1})\big] \le F(\mathbf{w}^{t})  \underbrace{ - \eta_g \mathbb{E}\big[\big<\nabla F(\mathbf{w}^{t}), \sum_{i \in \mathbf{S}^t} \frac{1}{|\mathbf{S}^t|} \tilde{\mathbf{g}}_i^{t - \tau_i}\big>\big]}_{:= X_1} + \frac{L\eta_g^2}{2} \underbrace{\mathbb{E}\big[||\sum_{i \in \mathbf{S}^t} \frac{1}{|\mathbf{S}^t|} \tilde{\mathbf{g}}_i^{t - \tau_i}||^2\big]}_{:= X_2}
+\end{equation}
+
+We define the expectation as :
+\begin{align*}
+    \mathbb{E}[\cdot] = \mathbb{E}_{i\sim \mathcal{N}}\mathbb{E}_{\xi|i}\mathbb{E}_{C|\xi,i}[\cdot]
+\end{align*}
+
+We first derive the first term $X_1$:
+\begin{align*}
+X_1 &= - \eta_g \mathbb{E}\big[\big<\nabla F(\mathbf{w}^{t}), \sum_{i \in \mathbf{S}^t} \frac{1}{|\mathbf{S}^t|} \tilde{\mathbf{g}}_i^{t - \tau_i}\big>\big]
+\\
+&= - \eta_g \mathbb{E}\big[\sum_{i \in \mathbf{S}^t} \frac{1}{|\mathbf{S}^t|}\big<\nabla F(\mathbf{w}^{t}), C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})\big>\big]
+\\
+&= - \eta_g \mathbb{E}\big[\sum_{i \in \mathbf{S}^t} \frac{1}{|\mathbf{S}^t|}\big<\nabla F(\mathbf{w}^{t}), C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})\big>\big]
+\\
+&= - \frac{\eta_g}{2} \mathbb{E}\big[\sum_{i \in \mathbf{S}^t} \frac{1}{|\mathbf{S}^t|}(||\nabla F(\mathbf{w}^{t})||^2 + ||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2) - ||\nabla F(\mathbf{w}^{t}) - C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\\
+&= - \frac{\eta_g}{2}||\nabla F(\mathbf{w}^{t})||^2 - \frac{\eta_g}{2}\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big] 
+\\
+&\quad + \frac{\eta_g}{2}\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||\nabla F(\mathbf{w}^{t}) - C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\end{align*}
+
+where the result of the penultimate equal sign is obtained according to inequality (\ref{equ:inner product})
+
+For the last term $X_2$, we have:
+
+\begin{align*}
+X_2 &= \mathbb{E}\big[||\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t} \tilde{\mathbf{g}}_i^{t - \tau_i}||^2\big] 
+\\
+&= \mathbb{E}\big[||\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t} C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\\
+^{(\ref{equ:vector norm})}&\le \mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\end{align*}
+
+where the result of the last equal sign is obtained according to Inequality (\ref{equ:vector norm})
+
+Combine $X_1$ and $X_2$ to the original inequality (\ref{equ:first lsmooth}):
+\begin{align*}
+\mathbb{E}\big[F(\mathbf{w}^{t + 1})\big] &\le F(\mathbf{w}^{t})  - \frac{\eta_g}{2}||\nabla F(\mathbf{w}^{t})||^2 - \frac{\eta_g}{2}\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big] 
+\\
+&\qquad + \frac{\eta_g}{2}\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||\nabla F(\mathbf{w}^{t}) - C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big] + \frac{L\eta_g^2}{2}\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\\
+&= F(\mathbf{w}^{t})  - \frac{\eta_g}{2}||\nabla F(\mathbf{w}^{t})||^2 + \frac{\eta_g}{2}(L\eta_g - 1)\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\\
+&\qquad + \frac{\eta_g}{2}\underbrace{\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||\nabla F(\mathbf{w}^{t}) - C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]}_{X_3}
+\end{align*}
+
+Then, we simplify $\xi_i^{t-\tau_i, j}$ as $\xi$. To derive the upper bound of the above inequality, we focus on the $X_3$ term:
+
+\begin{align*}
+X_3 
+&= \mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||\nabla F(\mathbf{w}^{t}) - C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\\
+&= \mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||\nabla F(\mathbf{w}^{t}) - C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi))||^2\big]
+\\
+&= \mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||(1 - \eta_l k)\nabla F(\mathbf{w}^t) + \eta_l \sum_{j = 0}^{k - 1}\nabla F(\mathbf{w}^{t}) \pm \eta_l \sum_{j = 0}^{k - 1} \nabla F(\mathbf{w}^{t-\tau_i}) 
+\\
+&\quad \pm \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}^{t-\tau_i}) \pm \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j}) \pm\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi) - C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi))||^2\big]
+\\
+&\le \mathbb{E}\big[\frac{6}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}((1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + ||\eta_l \sum_{j = 0}^{k - 1} \nabla F(\mathbf{w}^{t}) - \eta_l \sum_{j = 0}^{k - 1} \nabla F(\mathbf{w}^{t-\tau_i})||^2 
+\\
+&\quad + ||\eta_l \sum_{j = 0}^{k - 1} \nabla F(\mathbf{w}^{t-\tau_i}) - \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}^{t-\tau_i})||^2 + ||\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}^{t-\tau_i}) - \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j}) ||^2 
+\\
+&\quad + ||\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i,j}) - \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j}, \xi) ||^2 + || \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi) - C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi))||^2) \big]
+\\
+&\le \mathbb{E}\big[\frac{6}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}((1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + L^2\eta_l^2k^2||\mathbf{w}^{t} - \mathbf{w}^{t-\tau_i}||^2 
+\\
+&\quad + \eta_l^2k^2\zeta_i^2 + L^2 \eta_l^2k \sum_{j = 0}^{k - 1}||\mathbf{w}^{t-\tau_i} - \mathbf{w}_i^{t-\tau_i, j}||^2 + \eta_l^2k^2\sigma^2 + (1 - \delta)|| \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi) ||^2) \big]
+\end{align*}
+
+We derive the above formula according to inequality (\ref{equ:vector norm}) and assumption 1, 2 respectively. Next, to establish the upper bound of $X_3$, we employ two lemmas to facilitate our derivation process.
+
+\textbf{Lemma 1.} The difference between the current global model and stale global model.
+\begin{equation}
+    ||\mathbf{w}^{t} - \mathbf{w}^{t-\tau_i}||^2  
+\le \tau_i\sum_{h = t - \tau_i}^{t - 1}\frac{1}{|\mathbf{S}^h|}\sum_{c \in \mathbf{S}^h}||C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_c^{c-\tau_c, j},\xi)||^2
+\label{lemma1}
+\end{equation}
+
+\textit{Proof.}
+
+\begin{align*}
+||\mathbf{w}^{t} - \mathbf{w}^{t-\tau_i}||^2 &= ||\sum_{h = t - \tau_i}^{t - 1}(\mathbf{w}^{h+ 1} - \mathbf{w}^{h})||^2
+\\
+&= ||\sum_{h = t - \tau_i}^{t - 1}\frac{1}{|\mathbf{S}^h|}\sum_{c \in \mathbf{S}^h}C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_c(\mathbf{w}_c^{t-\tau_c, j},\xi)||^2
+\\
+&\le \tau_i\sum_{h = t - \tau_i}^{t - 1}\frac{1}{|\mathbf{S}^h|}\sum_{c \in \mathbf{S}^h}||C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_c^{c-\tau_c, j},\xi)||^2
+\end{align*}
+
+\textbf{Lemma 2.} The upper bound of statistic local gradient of device $i$:
+\begin{equation}
+    \mathbb{E}||\nabla F_i(\mathbf{w},\xi)||^2 \le 3(\sigma^2 + \zeta_i^2 + G^2)
+\label{lemma2}
+\end{equation}
+
+\textit{Proof.}
+
+\begin{align*}
+\mathbb{E}||\nabla F_i(\mathbf{w},\xi)||^2 &\le \mathbb{E}||\nabla F_i(\mathbf{w},\xi) - \nabla F_i(\mathbf{w}) + F_i(\mathbf{w}) - F(\mathbf{w}) + F(\mathbf{w})||^2
+\\
+&\le 3(\mathbb{E}||\nabla F_i(\mathbf{w},\xi) - \nabla F_i(\mathbf{w})||^2 + \mathbb{E}||F_i(\mathbf{w}) - F(\mathbf{w})||^2 + \mathbb{E}||F(\mathbf{w})||^2)
+\\
+&\le 3(\sigma^2 + \zeta_i^2 + G^2)
+\end{align*}
+
+which is similar to \textbf{Lemma 1.} in \cite{fedbuffer}. Next, let's focus on $X_3$ again.
+
+\begin{align*}
+X_3
+&\le \mathbb{E}\big[\frac{6}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}((1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + L^2||\mathbf{w}^{t} - \mathbf{w}^{t-\tau_i}||^2 
+\\
+&\quad + \eta_l^2k^2\zeta_i^2 + L^2 \eta_l^2k \sum_{j = 0}^{k - 1}||\mathbf{w}^{t-\tau_i} - \mathbf{w}_i^{t-\tau_i, j}||^2 + \eta_l^2k^2\sigma^2 + (1 - \delta)|| \eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_i^{t-\tau_i, j},\xi) ||^2) \big]
+\\
+&\le 6(1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + \mathbb{E} \big[\frac{6}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}( L^2\tau_i\sum_{h = t - \tau_i}^{t - 1}\frac{1}{|\mathbf{S}^h|}\sum_{c \in \mathbf{S}^h}||C(\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_c^{c-\tau_c, j},\xi)||^2
+\\
+&\quad + \eta_l^2k^2\zeta_i^2 + L^2 \eta_l^2k  \sum_{j = 0}^{k - 1}||\eta_l\sum_{\rho =0}^{j - 1}\nabla F(\mathbf{w}_i^{t-\tau_i, \rho},\xi)||^2 + \eta_l^2k^2\sigma^2 + 3(1 - \delta)\eta_l^2k^2(\sigma^2 + \zeta_i^2 + G^2)) \big]
+\\
+&\le 6(1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + 6\eta_l^2k^2(\sigma^2 + \zeta^2) + \mathbb{E} \big[\frac{6}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}( 2L^2\tau_i(2 - \delta)\sum_{h = t - \tau_i}^{t - 1}\frac{1}{|\mathbf{S}^h|}\sum_{c \in \mathbf{S}^h}||\eta_l \sum_{j = 0}^{k - 1} \nabla F_i(\mathbf{w}_c^{c-\tau_c, j},\xi)||^2
+\\
+&\quad  + 3L^2 \eta_l^4k^4  (\sigma^2 + \zeta_i^2 + G^2)  + 3(1 - \delta)\eta_l^2k^2(\sigma^2 + \zeta_i^2 + G^2)) \big]
+\\
+&\le 6(1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + 6\eta_l^2k^2(\sigma^2 + \zeta^2) + 18L^2 \eta_l^4k^4  (\sigma^2 + \zeta^2 + G^2)  + 18(1 - \delta)\eta_l^2k^2(\sigma^2 + \zeta^2 + G^2)
+\\
+&\quad + 36L^2\eta_l^4k^4\tau_{max}^2(2 - \delta)(\sigma^2 + \zeta^2 + G^2)
+\end{align*}
+
+where $\tau_{max} = \mathop{max}_{i \in \mathcal{N}} \; \tau_i$ is the max staleness of all devices. Then we can get:
+
+\begin{align*}
+\mathbb{E}\big[F(\mathbf{w}^{t + 1})\big] 
+&\le F(\mathbf{w}^{t})  - \frac{\eta_g}{2}||\nabla F(\mathbf{w}^{t})||^2 + \frac{\eta_g}{2}(L\eta_g - 1)\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]
+\\
+&\qquad + \frac{\eta_g}{2}\underbrace{\mathbb{E}\big[\frac{1}{|\mathbf{S}^t|}\sum_{i \in \mathbf{S}^t}||\nabla F(\mathbf{w}^{t}) - C(\mathbf{w}_i^{t-\tau_i, 0} - \mathbf{w}_i^{t-\tau_i, k})||^2\big]}_{X_3}
+\\
+&\le F(\mathbf{w}^{t})  - \frac{\eta_g}{2}||\nabla F(\mathbf{w}^{t})||^2 + 3\eta_g(L\eta_g - 1)\eta_l^2k^2(2-\delta)(\sigma^2 + \zeta^2 + G^2)
+\\
+&\quad + \frac{\eta_g}{2}\big[6(1-\eta_lk)^2||\nabla F(\mathbf{w}^{t})||^2 + 6\eta_l^2k^2(\sigma^2 + \zeta^2) + 18L^2 \eta_l^4k^4  (\sigma^2 + \zeta^2 + G^2)  + 18(1 - \delta)\eta_l^2k^2(\sigma^2 + \zeta^2 + G^2)
+\\
+&\quad + 36L^2\eta_l^4k^4\tau_{max}^2(2 - \delta)(\sigma^2 + \zeta^2 + G^2)\big]
+\end{align*}
+
+We choose  global learning rate and local learning rate satisfy $\eta_l, \eta_g \le \frac{1}{L}$. Besides, we suppose $Q_l = 6(1 - \eta_l k)^2 - 1 \ge 0$. We arrange this convergence bound:
+
+\begin{align*}
+\mathbb{E}\big[F(\mathbf{w}^{t + 1})\big] - F(\mathbf{w}^{t})
+&\le  -\frac{\eta_g}{2}Q_l||\nabla F(\mathbf{w}^{t})||^2
+\\
+&\quad  + \frac{\eta_g}{2}\big[6\eta_l^2k^2(\sigma^2 + \zeta^2) + 18\eta_l^2k^4  (\sigma^2 + \zeta^2 + G^2)  + 18(1 - \delta)\eta_l^2k^2(\sigma^2 + \zeta^2 + G^2)
+\\
+&\quad + 36\eta_l^2k^4\tau_{max}^2(2 - \delta)(\sigma^2 + \zeta^2 + G^2)\big]
+\end{align*}
+
+To simplify the expression, we assume $B_1 = 18(\sigma^2 + \zeta^2 + G^2)$ and $B_2 = 6(\sigma^2 +\zeta^2)$. Then we sum up $t$ in the above inequality  from $0$ to $T - 1$ and arrange the result, we have:
+
+\begin{equation}
+\frac{1}{T}\sum_{t = 0}^{T - 1}||\nabla F(\mathbf{w}^{t})||^2 
+\le \frac{2[F(\mathbf{w}^{0}) - F(\mathbf{w}^{*})]}{\eta_g Q_lT}
++ \eta_l^2k^2\frac{(1 - \delta)B_1 + B_2}{Q_l} 
++ \eta_l^2k^4\frac{[2\tau_{max}^2(2 - \delta) + 1]B_1}{Q_l}
+\label{full convergence}
+\end{equation}
+
+To get the convergence rate, we choose $\eta_g = \mathcal{O}(\sqrt{\frac{k}{T}})$ and $\eta_l = \mathcal{O}(T^{-1/4}k^{-5/2}\delta^{-1/2})$. Then we have the convergence rate:
+
+\begin{equation}
+\frac{1}{T}\sum_{t = 0}^{T - 1}||\nabla F(\mathbf{w}^{t})||^2 
+\le
+\mathcal{O}(\frac{F^{*}}{\sqrt{kT}}) 
++ \mathcal{O}(\frac{(1 - \delta)B_1+B_2}{k^3\sqrt{T}\delta})
++ \mathcal{O}(\frac{(\tau_{max}^2(2 - \delta) + 1)B_1}{\sqrt{T}k\delta})
+\label{convergence rate}
+\end{equation}
+
+\textbf{Insight}.
+
+Then we focus on the third term and discuss how to get the fastest convergence. We name the third term as \textit{domain term}. To get the fastest convergence, we should minimize the domain term. According to the definition of staleness, we expand $\tau_{max}$ as $k\alpha + \delta \beta$, where $\alpha = \alpha_m, \beta = \beta_m, m = arg\; max_{i} \tau_{i}$ . Then we get the domain term as :
+\begin{equation}
+\phi(k, \delta) = \frac{(k\alpha + \delta\beta)^2(2 - \delta) + 1}{k\delta}
+\end{equation}
+where $k \in [k_{min}, k_{max}], \delta \in [\delta_{min}, \delta_{max}]$. Then we have the optimization equation:
+\begin{align*}
+min_{k, \delta} &\;\; \phi(k,\delta)
+\\
+s.t. &\;  k \in [k_{min}, k_{max}]
+\\
+&\; \delta \in [\delta_{min}, \delta_{max}]
+\end{align*}
+ 
+
+% \textit{PS:} If we do not consider the range of $k$ and $\delta$, we solve the minimum value of $\phi$.
+
+% \begin{align*}
+% \frac{\partial\phi}{\partial k} &= \frac{2\alpha^2}{\delta} - \frac{2\beta^2\delta}{k^2} - \alpha^2 + \frac{\beta^2\delta^2}{k^2} - \frac{1}{k^2\delta}
+% \\
+% \frac{\partial\phi}{\partial \delta} &= -\frac{2\alpha^2k}{\delta^2} + \frac{2\beta^2}{k} - 2\alpha\beta - \frac{2\beta^2\delta}{k} - \frac{1}{k\delta^2}   
+% \end{align*}
+
+% Let the partial derivatives in the above two formulas be equal to zero, we have:
+
+% \begin{align*}
+% k^2 &= \frac{\beta^2}{\alpha^2}\delta^2 + \frac{1}{\alpha^2(2 - \delta)}
+% \\
+% 2\beta\delta^2&(\beta - 2\alpha k - \beta\delta) = 1 + 2\alpha^2k^2
+% \end{align*}
+
+% We can find that the local updating frequency and compression rate are positively correlated, and the setting of the specific value is related to the computing capability and communication capability of the device.
+
+\begin{thebibliography}{99}  
+\bibitem{FedSA} Chen M, Mao B, Ma T. Fedsa: A staleness-aware asynchronous federated learning algorithm with non-iid data[J]. Future Generation Computer Systems, 2021, 120: 1-12.
+
+\bibitem{topktheroy} Stich S U, Cordonnier J B, Jaggi M. Sparsified SGD with memory[J]. Advances in Neural Information Processing Systems, 2018, 31.
+
+\bibitem{fedbuffer} Nguyen J, Malik K, Zhan H, et al. Federated learning with buffered asynchronous aggregation[C]//International Conference on Artificial Intelligence and Statistics. PMLR, 2022: 3581-3607.
+
+\bibitem{fedlamp} Xu Y, Liao Y, Xu H, et al. Adaptive control of local updating and model compression for efficient federated learning[J]. IEEE Transactions on Mobile Computing, 2022.
+
+\end{thebibliography}
+\end{document}
