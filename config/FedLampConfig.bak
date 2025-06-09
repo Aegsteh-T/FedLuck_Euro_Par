@@ -1,0 +1,43 @@
+{
+    "client": {
+        "optimizer": {
+            "method": "SGD",
+            "lr": 0.01,
+            "momentum": 0.9
+        }
+    },
+    "global": {
+        "loss function": "CrossEntropy",
+        "updater": {
+            "method": "period",
+            "params": {
+                "alpha": 1
+            }
+        },
+        "schedule": {
+            "method": "random",
+            "params": {
+                "proportion": 1
+            }
+        },
+        "bandwidth": {
+            "mode": "base",
+            "param": 1.5
+        }
+    },
+    "device": "gpu",
+    "data_distribution": {
+        "iid": true,
+        "customize": false,
+        "cus_distribution": [2,2,2,2,2,2,2,2,2,2]
+    },
+    "compressor": {
+        "downlink": {
+            "method": "none",
+            "params": {
+                "cr": 1,
+                "error_feedback": true
+            }
+        }
+    }
+}

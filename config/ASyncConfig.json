@@ -1,0 +1,48 @@
+{
+    "client": {
+        "optimizer": {
+            "method": "SGD",
+            "momentum": 0.9
+        }
+    },
+    "global": {
+        "loss function": "CrossEntropy",
+        "updater": {
+            "method": "period",
+            "params": {
+            }
+        },
+        "schedule": {
+            "method": "idle",
+            "params": {
+                "proportion": 0.8
+            }
+        },
+        "bandwidth": {
+            "mode": "uniform",
+            "min" : 0.1,
+            "max" : 0.25,
+            "straggler" : 0.03
+        }
+    },
+    "device": "gpu",
+    "data_distribution": {
+        "customize": false,
+        "cus_distribution": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+        ]
+    },
+    "compressor": {
+        "downlink": {
+        }
+    }
+}

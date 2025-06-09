@@ -1,0 +1,65 @@
+{
+    "client": {
+        "optimizer": {
+            "method": "SGD",
+            "lr": 0.01,
+            "momentum": 0.9
+        }
+    },
+    "global": {
+        "model": "VGG11s_3",
+        "dataset": "CIFAR10",
+        "loss function": "CrossEntropy",
+        "updater": {
+            "method": "period",
+            "params": {
+                "lr_server": 1
+            }
+        },
+        "epoch": 300,
+        "epoch_time": 0.5,
+        "schedule": {
+            "method": "idle",
+            "params": {
+                "proportion": 0.8
+            }
+        },
+        "bandwidth": {
+            "mode": "base",
+            "param": 1.5
+        }
+    },
+    "device": "gpu",
+    "data_distribution": {
+        "iid": true,
+        "customize": false,
+        "cus_distribution": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+        ]
+    },
+    "compressor": {
+        "uplink": {
+            "method": "topk",
+            "params": {
+                "cr": 1,
+                "error_feedback": true
+            }
+        },
+        "downlink": {
+            "method": "none",
+            "params": {
+                "cr": 1,
+                "error_feedback": true
+            }
+        }
+    }
+}
